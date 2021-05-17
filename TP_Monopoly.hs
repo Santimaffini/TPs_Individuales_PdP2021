@@ -8,7 +8,10 @@ data Participante = Participante{
     acciones     :: [Accion]
     }deriving (Show)
 
-type Propiedad = (String,Int)
+data Propiedad = Propiedad{
+    nombrePropiedad :: String,
+    precio :: Int
+}deriving (Eq,Show)
 
 type Accion = Participante -> Participante
 
@@ -16,12 +19,28 @@ type Accion = Participante -> Participante
 cambiarDinero :: (Int -> Int) -> Participante -> Participante
 cambiarDinero funcion jugador = jugador{dinero = funcion (dinero jugador)}
 
-cantidadPropiedadesSegun :: (Int -> Bool) -> [Propiedad] -> Int
-cantidadPropiedadesSegun condicion propiedades = (length.filter condicion) (map snd propiedades)
+agregarPropiedad :: Propiedad -> Accion
+agregarPropiedad propiedad jugador = jugador{propiedades = propiedades jugador ++ [propiedad] }
+
+adquirirPropiedad :: Propiedad -> Accion
+adquirirPropiedad propiedad jugador = cambiarDinero (subtract (precio propiedad)).agregarPropiedad propiedad $ jugador
+
+esTacticaGanadora :: Participante -> Bool
+esTacticaGanadora jugador = tactica jugador == "Oferente singular" || tactica jugador == "Accionista"
+
+puedeComprar :: Propiedad -> Participante -> Bool
+puedeComprar propiedad jugador = dinero jugador >= precio propiedad
+
+cambiarTactica :: String -> Participante -> Participante
+cambiarTactica unaTactica jugador = jugador{tactica = unaTactica}
+
+valorAlquilerPropiedades :: Propiedad -> Int
+valorAlquilerPropiedades propiedad | ((<150).precio) propiedad = 10
+                                   | otherwise = 20
 
 --Acciones
 pasarPorElBanco :: Accion
-pasarPorElBanco jugador = cambiarDinero (+40) jugador{tactica = "Comprador Compulsivo"}
+pasarPorElBanco jugador = cambiarDinero (+40).cambiarTactica "Comprador Compulsivo" $ jugador
 
 enojarse :: Accion
 enojarse jugador = cambiarDinero (+50) jugador{acciones = acciones jugador ++ [gritar]}
@@ -30,18 +49,18 @@ gritar :: Accion
 gritar jugador = jugador{nombre = "AHHHH" ++ nombre jugador}
 
 subastar :: Propiedad -> Accion 
-subastar propiedad jugador | (tactica jugador == "Oferente singular" || tactica jugador == "Accionista") && dinero jugador >= snd propiedad = cambiarDinero (+(-snd propiedad)) jugador{propiedades = propiedades jugador ++ [propiedad] }
+subastar propiedad jugador | esTacticaGanadora jugador && puedeComprar propiedad jugador = adquirirPropiedad propiedad jugador
                            | otherwise = jugador
 
 cobrarAlquileres :: Accion
-cobrarAlquileres jugador = cambiarDinero (+((cantidadPropiedadesSegun (<150) $ propiedades jugador)*10 + (cantidadPropiedadesSegun (>=150) $ propiedades jugador)*20)) jugador
+cobrarAlquileres jugador = cambiarDinero (+(sum.map valorAlquilerPropiedades $ (propiedades jugador))) jugador
 
 pagarAAccionistas :: Accion
 pagarAAccionistas jugador | tactica jugador == "Accionista" = cambiarDinero (+200) jugador
-                          | otherwise = cambiarDinero (+(-100)) jugador
+                          | otherwise = cambiarDinero (subtract 100) jugador
 
 hacerBerrinchePor :: Propiedad -> Accion
-hacerBerrinchePor propiedad jugador | dinero jugador >= snd propiedad = subastar propiedad jugador
+hacerBerrinchePor propiedad jugador | puedeComprar propiedad jugador = adquirirPropiedad propiedad jugador
                                     | otherwise = (hacerBerrinchePor propiedad).gritar.(cambiarDinero (+10)) $ jugador
 
 ultimaRonda :: Accion
@@ -53,7 +72,13 @@ juegoFinal jugador1 jugador2 | (dinero.ultimaRonda) jugador1 > (dinero.ultimaRon
 
 --Participantes
 carolina :: Participante
-carolina = Participante{nombre = "Carolina", dinero = 500, tactica = "Accionista", propiedades = [("Avenida Las Heras",160)], acciones = [pasarPorElBanco, pagarAAccionistas]}
+carolina = Participante{nombre = "Carolina", dinero = 500, tactica = "Accionista", propiedades = [lasHeras, yrigoyen], acciones = [pasarPorElBanco, pagarAAccionistas]}
 
 manuel :: Participante
-manuel = Participante{nombre = "Manuel", dinero = 500, tactica = "Oferente singular", propiedades = [("Avenida Hipolito Yrigoyen",205)], acciones = [pasarPorElBanco, enojarse]}
+manuel = Participante{nombre = "Manuel", dinero = 500, tactica = "Oferente singular", propiedades = [], acciones = [pasarPorElBanco, enojarse]}
+
+lasHeras :: Propiedad
+lasHeras = Propiedad{nombrePropiedad = "Las Heras", precio = 150}
+
+yrigoyen :: Propiedad
+yrigoyen = Propiedad{nombrePropiedad = "Hipolito Yrigoyen", precio = 100}
